@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071b33">
+  <meta name="description" content="바이러스 유전체, family, VAP·receptor 관계와 항바이러스제를 전범위로 복습하는 퀴즈">
+  <title>ViroMap — 바이러스 관계 퀴즈</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23071b33'/%3E%3Cpath d='M17 20h30M17 44h30M22 20c0 12 20 12 20 24M42 20c0 12-20 12-20 24' fill='none' stroke='%235de1c3' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <button class="brand" id="brand-home" aria-label="처음 화면으로 이동"><span class="mark">V</span><span>ViroMap</span></button>
+      <div class="side-block">
+        <div class="side-label">Review architecture</div>
+        <div class="nav-card"><strong>전범위 · 양방향</strong><span>한 회차에 모든 관계를 빠짐없이 확인합니다.</span></div>
+      </div>
+      <div class="side-block relationship-map" aria-hidden="true">
+        <div><span>Genome</span><i></i><span>Family</span><i></i><span>Virus</span></div>
+        <div><span>VAP</span><i></i><span>Target</span><i></i><span>Receptor</span></div>
+        <div><span>Drug</span><i></i><span>Target</span><i></i><span>Action</span></div>
+      </div>
+      <button class="wrong-shortcut" id="wrong-shortcut" type="button">
+        <span>저장된 오답</span><strong id="wrong-count">0</strong>
+      </button>
+      <div class="legend"><span></span>현재 분류명 우선 · 강의 표기 병기</div>
+    </aside>
+
+    <main>
+      <section class="home" id="home">
+        <div class="eyebrow">Microbiology relationship review</div>
+        <h1>외우는 대신,<br>관계를 연결하세요.</h1>
+        <p class="intro">답변 방식을 고른 뒤 학습할 관계를 선택하세요. 문제 방향은 회차마다 바뀌고, 틀린 관계만 기기에 남습니다.</p>
+
+        <fieldset class="style-picker" aria-label="답변 방식">
+          <legend>답변 방식</legend>
+          <label><input type="radio" name="quiz-style" value="choice" checked><span>객관식</span></label>
+          <label><input type="radio" name="quiz-style" value="written"><span>서술형</span></label>
+          <label><input type="radio" name="quiz-style" value="mixed"><span>혼합</span></label>
+        </fieldset>
+
+        <div class="mode-grid">
+          <button class="mode-card" data-mode="taxonomy" type="button">
+            <span class="mode-num">01</span>
+            <h2>유전체 · Family · Virus</h2>
+            <p>유전체형과 virus family, 해당 family의 대표 virus를 양방향으로 확인합니다.</p>
+            <span class="mode-meta"><b id="taxonomy-total">0</b>개 관계 세트</span>
+            <span class="start">이 모드 시작 <b>→</b></span>
+          </button>
+          <button class="mode-card" data-mode="attachment" type="button">
+            <span class="mode-num">02</span>
+            <h2>VAP · 표적세포 · Receptor</h2>
+            <p>바이러스 부착에 관여하는 네 요소의 연결을 전범위로 확인합니다.</p>
+            <span class="mode-meta"><b id="attachment-total">0</b>개 바이러스</span>
+            <span class="start">이 모드 시작 <b>→</b></span>
+          </button>
+          <button class="mode-card antiviral-card" data-mode="antiviral" type="button">
+            <span class="mode-num">03</span>
+            <h2>항바이러스제 · 족보형</h2>
+            <p>석승혁 교수님 족보의 반복 출제 형식을 반영해 약물·표적·작용기전을 확인합니다.</p>
+            <span class="mode-meta"><b id="antiviral-total">15</b>문항 · 객관식 10 + 서술형 5</span>
+            <span class="start">족보형 퀴즈 시작 <b>→</b></span>
+          </button>
+        </div>
+        <p class="scope-note"><strong>한 회차의 원칙</strong> 관계 퀴즈는 선택한 범위를 전부 확인합니다. 항바이러스제는 답변 방식 선택과 관계없이 족보형 15문항이 무작위 순서로 출제됩니다.</p>
+      </section>
+
+      <section class="quiz" id="quiz" aria-live="polite">
+        <div class="quiz-top">
+          <button class="back" id="back" type="button">← 모드 선택</button>
+          <div class="quiz-counter"><strong id="question-index">1</strong><span>/</span><span id="question-total">1</span></div>
+        </div>
+        <div class="progress" role="progressbar" aria-label="퀴즈 진행률" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div>
+        <article class="question-card">
+          <div class="question-kicker">
+            <span class="chip" id="question-format">객관식 · 모두 고르기</span>
+            <span class="direction" id="question-direction"></span>
+          </div>
+          <h2 id="question-text"></h2>
+          <div class="clue" id="question-clue"></div>
+          <form id="answer-form">
+            <div class="answers" id="answers"></div>
+            <div class="feedback" id="feedback" role="status"></div>
+            <div class="actions">
+              <button class="primary" id="submit-answer" type="submit">정답 확인</button>
+              <button class="primary next" id="next-question" type="button">다음 문제 →</button>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="summary" id="summary" aria-live="polite">
+        <span class="summary-mark" id="summary-mark">✓</span>
+        <div class="eyebrow">Session complete</div>
+        <h2 id="summary-title">한 회차를 완료했습니다.</h2>
+        <div class="score-line"><strong id="score-value">0</strong><span id="score-denominator">/ 0</span></div>
+        <p id="summary-copy"></p>
+        <div class="summary-actions">
+          <button class="primary" id="retry-wrong" type="button">이번 오답 다시 풀기</button>
+          <button class="secondary" id="new-session" type="button">새 회차 시작</button>
+        </div>
+        <div class="wrong-list" id="wrong-list"></div>
+      </section>
+    </main>
+  </div>
+  <script src="./app.js?v=5"></script>
+</body>
+</html>
