@@ -69,7 +69,7 @@
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char];
     });
   }
-  function normalize(value) {
+  function canonicalize(value) {
     return String(value || "")
       .toLowerCase()
       .replace(/[‐‑‒–—−]/g, "-")
@@ -95,8 +95,33 @@
       .replace(/hvea/g, "hvem")
       .replace(/neural cell adhesion molecule/g, "ncam")
       .replace(/intercellular adhesion molecule.?1/g, "icam1")
-      .replace(/not listed|not provided|미기재|미제시|없음/g, "강의표미제시")
+      .replace(/\bsigma\s*/g, "σ")
+      .replace(/not listed|not provided|미기재|미제시|없음/g, "강의표미제시");
+  }
+  function normalize(value) {
+    return canonicalize(value)
       .replace(/[^a-z0-9가-힣+σ]/g, "");
+  }
+  function searchable(value) {
+    return canonicalize(value)
+      .replace(/[^a-z0-9가-힣+σ]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+  function containsAcceptedPhrase(input, answer) {
+    var text = searchable(input);
+    var phrase = searchable(answer);
+    if (!phrase || text === phrase) return text === phrase;
+    var index = text.indexOf(phrase);
+    while (index >= 0) {
+      var before = index > 0 ? text.charAt(index - 1) : "";
+      var after = text.charAt(index + phrase.length);
+      var beforeIsBoundary = !before || !/[a-z0-9가-힣]/.test(before);
+      var afterIsBoundary = !after || !/[a-z0-9가-힣]/.test(after) || /[이가은는을를과와의에도만로서]/.test(after);
+      if (beforeIsBoundary && afterIsBoundary) return true;
+      index = text.indexOf(phrase, index + 1);
+    }
+    return false;
   }
   function acceptedValues(value) {
     var values = [value];
@@ -132,7 +157,7 @@
       var candidate = normalize(answer);
       if (!candidate) return false;
       if (candidate === needle) return true;
-      return candidate.length >= 3 && needle.indexOf(candidate) >= 0;
+      return candidate.length >= 3 && containsAcceptedPhrase(input, answer);
     });
     if (aliasMatch) return true;
     return (concepts || []).some(function (concept) {
@@ -540,6 +565,17 @@
         { key:"target", label:"Target cell", value:item.target },
         { key:"receptor", label:"Receptor", value:item.receptor }
       ].filter(function (relation) { return relation.value !== NOT_LISTED; });
+      var displayOnlyRelations = relations.filter(function (relation) {
+        return item.virus === "HIV" && relation.key === "receptor";
+      });
+      var quizRelations = relations.filter(function (relation) {
+        return displayOnlyRelations.indexOf(relation) < 0;
+      });
+      var displayOnlyClue = displayOnlyRelations.length
+        ? '<div class="clue-box"><b>정답 제시</b> · ' + displayOnlyRelations.map(function (relation) {
+            return escapeHtml(relation.label + ": " + relation.value);
+          }).join(" · ") + '</div>'
+        : "";
       var values = [item.virus].concat(relations.map(function (relation) { return relation.value; }));
       var labels = ["Virus"].concat(relations.map(function (relation) { return relation.label; }));
       var base = {
@@ -549,9 +585,9 @@
         direction:forward ? "Virus → Attachment profile" : "Attachment profile → Virus"
       };
       if (format === "choice" && forward) {
-        var correct = relations.map(function (relation) { return relation.label + " · " + relation.value; });
+        var correct = quizRelations.map(function (relation) { return relation.label + " · " + relation.value; });
         var options = correct.slice();
-        relations.forEach(function (relation) {
+        quizRelations.forEach(function (relation) {
           var other = sample(unique(attachments.map(function (record) { return record[relation.key]; }).filter(function (value) {
             return value !== NOT_LISTED && value !== relation.value;
           })), 1)[0];
@@ -559,7 +595,7 @@
         });
         questions.push(makeChoice(Object.assign(base, {
           prompt:escapeHtml(item.virus) + "에 대한 옳은 관계를 모두 고르세요.",
-          clue:""
+          clue:displayOnlyClue
         }), correct, options));
       } else if (format === "choice") {
         questions.push(makeChoice(Object.assign(base, {
@@ -568,7 +604,9 @@
         }), [item.virus], [item.virus].concat(sample(viruses.filter(function (virus) { return virus !== item.virus; }), 5))));
       } else {
         var hidden = [];
-        var relationIndexes = relations.map(function (_, index) { return index + 1; });
+        var relationIndexes = relations.map(function (relation, index) {
+          return quizRelations.indexOf(relation) >= 0 ? index + 1 : null;
+        }).filter(function (index) { return index !== null; });
         if (forward) {
           hidden = sample(relationIndexes, randomInt(1, Math.min(3, relationIndexes.length)));
         } else {
@@ -590,6 +628,7 @@
       var parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       if (!Array.isArray(parsed)) return [];
       var cleaned = parsed.filter(function (question) {
+        if (question && question.id === "attachment:HIV") return false;
         return !(question && question.mode === "attachment" && JSON.stringify(question).indexOf(NOT_LISTED) >= 0);
       });
       if (cleaned.length !== parsed.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
