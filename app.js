@@ -73,6 +73,13 @@
     return String(value || "")
       .toLowerCase()
       .replace(/[‐‑‒–—−]/g, "-")
+      .replace(/2\s*[′'’]?\s*[-,]?\s*5\s*[′'’]?\s*[-,]?\s*oligo\s*a\s*synthetase/g, "oas")
+      .replace(/2\s*[′'’]?\s*[-,]?\s*5\s*[′'’]?\s*[-,]?\s*oligoadenylate\s*synthetase/g, "oas")
+      .replace(/oligo\s*a\s*synthetase/g, "oas")
+      .replace(/oligoadenylate\s*synthetase/g, "oas")
+      .replace(/ribonuclease\s*l/g, "rnasel")
+      .replace(/rnase\s*l/g, "rnasel")
+      .replace(/protein\s*kinase\s*r/g, "pkr")
       .replace(/glycoprotein/g, "gp")
       .replace(/hemagglutinin/g, "ha")
       .replace(/epstein.?barr virus/g, "ebv")
@@ -119,9 +126,20 @@
     if (parenthetical) values.push(parenthetical[1]);
     return unique(values);
   }
-  function answerMatches(input, answers) {
+  function answerMatches(input, answers, concepts) {
     var needle = normalize(input);
-    return answers.some(function (answer) { return normalize(answer) === needle; });
+    var aliasMatch = answers.some(function (answer) {
+      var candidate = normalize(answer);
+      if (!candidate) return false;
+      if (candidate === needle) return true;
+      return candidate.length >= 3 && needle.indexOf(candidate) >= 0;
+    });
+    if (aliasMatch) return true;
+    return (concepts || []).some(function (concept) {
+      return concept.every(function (alternatives) {
+        return alternatives.some(function (keyword) { return needle.indexOf(normalize(keyword)) >= 0; });
+      });
+    });
   }
   function currentStyle() {
     var input = document.querySelector('input[name="quiz-style"]:checked');
@@ -144,6 +162,26 @@
     base.options = shuffle(unique(options));
     base.answerText = base.correct.join(" · ");
     return base;
+  }
+  function makeSingleIncorrect(question) {
+    if (question.format !== "choice") return question;
+    var alreadyAsksIncorrect = question.prompt.indexOf("옳지 않은") >= 0;
+    var selectedAnswers = question.correct.slice();
+    var unselectedAnswers = question.options.filter(function (option) { return selectedAnswers.indexOf(option) < 0; });
+    var falseOptions = alreadyAsksIncorrect ? selectedAnswers : unselectedAnswers;
+    var trueOptions = alreadyAsksIncorrect ? unselectedAnswers : selectedAnswers;
+    if (!falseOptions.length || trueOptions.length < 3) return question;
+
+    var wrongOption = sample(falseOptions, 1)[0];
+    question.correct = [wrongOption];
+    question.options = shuffle(sample(trueOptions, 3).concat([wrongOption]));
+    question.singleChoice = true;
+    question.answerText = wrongOption;
+    question.prompt = question.prompt
+      .replace(/<u>옳지 않은 것<\/u>을 모두 고르세요/g, "<u>옳지 않은 것</u>을 하나 고르세요")
+      .replace(/옳은 것을 모두 고르세요/g, "<u>옳지 않은 것</u>을 하나 고르세요")
+      .replace(/항바이러스 작용을 모두 고르세요/g, "항바이러스 작용으로 <u>옳지 않은 것</u>을 하나 고르세요");
+    return question;
   }
   function makeWritten(base, fields) {
     base.format = "written";
@@ -357,14 +395,13 @@
       makeWritten(Object.assign({}, base, {
         id:"antiviral:written-acyclovir",
         direction:"기전 빈칸형",
-        prompt:"Acyclovir의 선택적 활성화와 chain termination 기전의 빈칸을 채우세요.",
-        clue:'<div class="clue-box">첫 인산화: <b>①</b> → 추가 인산화: <b>②</b> → DNA 합성 중단의 구조적 이유: <b>③</b></div>',
+        prompt:"Acyclovir의 선택적 활성화에 관여하는 효소의 빈칸을 채우세요.",
+        clue:'<div class="clue-box">첫 인산화: <b>①</b> → 추가 인산화: <b>②</b><br><b>Chain termination 이유</b> · 3′-OH가 없어 다음 nucleotide가 연결되지 않음</div>',
         explanation:"감염 세포의 viral thymidine kinase가 첫 인산화를 하고 cellular kinase가 두 인산기를 더 붙입니다. 활성형 acyclovir는 3′-OH가 없어 다음 nucleotide가 연결되지 못합니다.",
         sourceRef:"강의록 28–31쪽"
       }), [
         {label:"① 첫 인산화 효소",display:"Viral thymidine kinase",accepted:["Viral thymidine kinase","viral TK","virus thymidine kinase","바이러스 thymidine kinase","바이러스 TK"]},
-        {label:"② 추가 인산화 효소",display:"Cellular kinase",accepted:["Cellular kinase","cell kinase","host cell kinase","숙주세포 kinase","세포 kinase"]},
-        {label:"③ Chain termination 이유",display:"3′-OH 결핍",accepted:["3'-OH 결핍","3′-OH 결핍","3' OH가 없음","3′ OH가 없음","3OH 없음","3-hydroxyl group 없음","3' hydroxyl group 없음"]}
+        {label:"② 추가 인산화 효소",display:"Cellular kinase",accepted:["Cellular kinase","cell kinase","host cell kinase","숙주세포 kinase","세포 kinase"]}
       ]),
       makeWritten(Object.assign({}, base, {
         id:"antiviral:written-amantadine",
@@ -394,11 +431,11 @@
         sourceRef:"강의록 12쪽"
       }), [
         {label:"①",display:"PKR",accepted:["PKR","protein kinase R"]},
-        {label:"②",display:"2′-5′-oligo A synthetase–RNase L",accepted:["2'-5' oligo A synthetase-RNase L","2′-5′-oligo A synthetase–RNase L","OAS-RNase L","2-5 OAS RNase L","2'5' oligoadenylate synthetase RNase L"]},
+        {label:"②",display:"OAS–RNase L",accepted:["OAS","RNase L","OAS-RNase L","OAS/RNase L","OAS pathway","RNase L pathway","2,5-oligo A synthetase-RNase L","2'-5' oligo A synthetase-RNase L","2′-5′-oligo A synthetase–RNase L","2-5 OAS RNase L","2'5' oligoadenylate synthetase RNase L"],concepts:[[["oas","oligoadenylatesynthetase","oligoasynthetase"]],[ ["rnasel"] ]]},
         {label:"③",display:"Mx GTPase",accepted:["Mx GTPase","Mx GTPases","Mx protein"]}
       ])
     ];
-    return shuffle(questions);
+    return shuffle(questions.map(makeSingleIncorrect));
   }
 
   function taxonomyQuestions(style) {
@@ -615,7 +652,9 @@
     var pct = state.questions.length ? (state.index / state.questions.length) * 100 : 0;
     el.progressFill.style.width = pct + "%";
     el.progress.parentElement.setAttribute("aria-valuenow", String(Math.round(pct)));
-    el.questionFormat.textContent = question.format === "choice" ? "객관식 · 모두 고르기" : "서술형 · 빈칸 채우기";
+    el.questionFormat.textContent = question.format === "choice"
+      ? (question.singleChoice ? "객관식 · 틀린 보기 1개" : "객관식 · 모두 고르기")
+      : "서술형 · 빈칸 채우기";
     el.questionDirection.textContent = question.topic + " · " + question.direction;
     el.questionText.innerHTML = question.prompt;
     el.questionClue.innerHTML = question.clue || "";
@@ -630,7 +669,7 @@
       question.options.forEach(function (option, index) {
         var label = document.createElement("label");
         label.className = "option-label";
-        label.innerHTML = '<input type="checkbox" name="option" value="' + escapeHtml(option) + '"><span>' + escapeHtml(option) + "</span>";
+        label.innerHTML = '<input type="' + (question.singleChoice ? "radio" : "checkbox") + '" name="option" value="' + escapeHtml(option) + '"><span>' + escapeHtml(option) + "</span>";
         el.answers.appendChild(label);
         if (index === 0) setTimeout(function () { label.querySelector("input").focus(); }, 0);
       });
@@ -640,7 +679,7 @@
       question.fields.forEach(function (field, index) {
         var wrapper = document.createElement("div");
         wrapper.className = "blank-field";
-        wrapper.innerHTML = '<label for="blank-' + index + '">' + escapeHtml(field.label) + '</label><input id="blank-' + index + '" name="blank-' + index + '" autocomplete="off" spellcheck="false" placeholder="답을 입력하세요">';
+        wrapper.innerHTML = '<label for="blank-' + index + '">' + escapeHtml(field.label) + '</label><input id="blank-' + index + '" name="blank-' + index + '" autocomplete="off" spellcheck="false" placeholder="답 또는 핵심 설명을 입력하세요">';
         grid.appendChild(wrapper);
       });
       el.answers.appendChild(grid);
@@ -662,7 +701,9 @@
         el.feedback.textContent = "보기를 하나 이상 선택하세요.";
         return;
       }
-      correct = selected.length === question.correct.length && question.correct.every(function (answer) { return selected.indexOf(answer) >= 0; });
+      correct = question.singleChoice
+        ? selected.length === 1 && selected[0] === question.correct[0]
+        : selected.length === question.correct.length && question.correct.every(function (answer) { return selected.indexOf(answer) >= 0; });
       Array.prototype.slice.call(el.answers.querySelectorAll(".option-label")).forEach(function (label) {
         var input = label.querySelector("input");
         input.disabled = true;
@@ -682,7 +723,7 @@
       inputs.forEach(function (input, index) {
         var normalizedInput = normalize(input.value);
         var isDuplicate = Boolean(question.distinctPool) && seenAnswers.indexOf(normalizedInput) >= 0;
-        var fieldCorrect = answerMatches(input.value, question.fields[index].accepted) && !isDuplicate;
+        var fieldCorrect = answerMatches(input.value, question.fields[index].accepted, question.fields[index].concepts) && !isDuplicate;
         seenAnswers.push(normalizedInput);
         input.classList.add(fieldCorrect ? "correct" : "wrong");
         input.disabled = true;
